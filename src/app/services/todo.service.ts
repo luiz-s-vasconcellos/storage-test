@@ -8,8 +8,10 @@ import { Todo } from './todo';
 })
 export class TodoService {
   private todoListSource = new BehaviorSubject<Array<Todo>>([]);
+  private lockedSource = new BehaviorSubject(false);
 
   currentTodoList = this.todoListSource.asObservable();
+  currentLocked = this.lockedSource.asObservable();
 
   constructor(private poStorageService: PoStorageService) {
     this.poStorageService.get('todoList').then(data => {
@@ -17,14 +19,22 @@ export class TodoService {
     })
   }
 
-  addTodo(todo: Todo) {
+  async addTodo(todo: Todo) {
+    await this.poStorageService.requestIdlePromise();
+
+    this.poStorageService.lock();
+
     this.poStorageService.appendItemToArray('todoList', todo).then(data => {
       this.todoListSource.next(data);
-    })
+    });
+
+    this.poStorageService.unlock();
   }
 
-  removeTodo(todo: Todo) {
-    this.poStorageService.removeItemFromArray('todoList', 'name', todo.name).then(data => {
+  async removeTodo(todo: Todo) {
+    this.poStorageService.limitedCallWrap(async () => {
+      const data = await this.poStorageService.removeItemFromArray('todoList', 'name', todo.name);
+
       this.todoListSource.next(data);
     })
   }
